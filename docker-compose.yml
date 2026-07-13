@@ -1,0 +1,59 @@
+version: "3"
+services:
+  mongodb:
+    image: mongo:6.0
+    container_name: growthbook_mongo
+    environment:
+      - MONGO_INITDB_ROOT_USERNAME=root
+      - MONGO_INITDB_ROOT_PASSWORD=password
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+
+  postgres:
+    image: postgres:15-alpine
+    container_name: growthbook_postgres
+    environment:
+      - POSTGRES_DB=analytics
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7-alpine
+    container_name: growthbook_redis
+    ports:
+      - "6379:6379"
+
+  growthbook:
+    image: growthbook/growthbook:latest
+    container_name: growthbook_app
+    ports:
+      - "3000:3000"
+      - "3100:3100"
+    depends_on:
+      - mongodb
+      - postgres
+      - redis
+    environment:
+      - NODE_ENV=production
+      - MONGODB_URI=mongodb://root:password@mongodb:27017/growthbook?authSource=admin
+      - JWT_SECRET=c3VwZXJzZWNyZXRqd3R0b2tlbnBhc3NwaHJhc2Vmb3Jsb2NhbGRldmVsb3BtZW50
+      - ENCRYPTION_KEY=c3VwZXJzZWNyZXRlbmNyeXB0aW9ua2V5Zm9ybG9jYWxkZXZlbG9wbWVudA==
+      - APP_ORIGIN=http://localhost:3000
+      - API_HOST=http://localhost:3100
+      # Redis cache integration for the GrowthBook API
+      - CACHE_ENGINE=redis
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+    volumes:
+      - growthbook_uploads:/usr/local/src/app/packages/back-end/uploads
+
+volumes:
+  mongo_data:
+  pg_data:
+  growthbook_uploads:
