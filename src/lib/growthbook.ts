@@ -1,36 +1,57 @@
 import { GrowthBook } from "@growthbook/growthbook";
 import { cookies as nextCookies, headers as nextHeaders } from "next/headers";
+import { LOCAL_MOCK_FEATURES } from "./gb-features";
 
 // Fetch features from the local/cloud GrowthBook instance
 export async function getGrowthBookFeatures() {
+  // Check if headers were already injected by Edge Middleware to prevent duplicate parsing/fetching
+  try {
+    const headerStore = await nextHeaders();
+    const gbFeaturesHeader = headerStore.get("x-gb-features");
+    if (gbFeaturesHeader) {
+      return JSON.parse(gbFeaturesHeader);
+    }
+  } catch (err) {
+    console.warn("Could not read headers in getGrowthBookFeatures:", err);
+  }
+
   const apiHost = process.env.NEXT_PUBLIC_GROWTHBOOK_API_HOST || "http://localhost:3100";
   const clientKey = process.env.NEXT_PUBLIC_GROWTHBOOK_CLIENT_KEY;
 
   if (!clientKey) {
-    console.error("GrowthBook Client Key is not configured!");
-    return {};
+    console.warn("GrowthBook Client Key is not configured. Falling back to local mock features.");
+    return LOCAL_MOCK_FEATURES;
   }
 
   const url = `${apiHost}/api/features/${clientKey}`;
 
   try {
     const res = await fetch(url, {
-      // Revalidate cache every 10 seconds for development POC.
       next: { revalidate: 10 },
     });
     if (!res.ok) {
       throw new Error(`Failed to fetch features: ${res.statusText}`);
     }
     const json = await res.json();
-    return json.features || {};
+    return json.features || LOCAL_MOCK_FEATURES;
   } catch (err) {
-    console.error("Error fetching features from GrowthBook:", err);
-    return {};
+    console.warn("Error fetching features from GrowthBook, using local mock features fallback:", err);
+    return LOCAL_MOCK_FEATURES;
   }
 }
 
 // Fetch user attributes server-side from request contexts
 export async function getServerAttributes() {
+  try {
+    const headerStore = await nextHeaders();
+    const gbAttrsHeader = headerStore.get("x-gb-attributes");
+    if (gbAttrsHeader) {
+      return JSON.parse(gbAttrsHeader);
+    }
+  } catch (err) {
+    console.warn("Could not read headers in getServerAttributes:", err);
+  }
+
   const cookieStore = await nextCookies();
   const headerStore = await nextHeaders();
   

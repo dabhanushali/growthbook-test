@@ -11,10 +11,15 @@ export default function Home() {
   const isDarkMode = useFeatureIsOn("dark-mode");
   const isAiAssistantEnabled = useFeatureIsOn("ai-assistant");
   const isNewCheckoutEnabled = useFeatureIsOn("new-checkout");
+  const isSignupBannerEnabled = useFeatureIsOn("signup-banner");
 
-  // 2. Evaluate Experiment Values (with defaults)
+  // 2. Evaluate Experiment & Remote Config Values (with defaults)
   const heroVariant = useFeatureValue("homepage-hero", "control"); // "control" vs "variant"
   const ctaColor = useFeatureValue("cta-button", "blue"); // "blue" vs "green"
+  const homepageContent = useFeatureValue("homepage-content", {
+    title: "Next.js Edge Experimentation & Flags",
+    description: "Welcome to the control hero section. Check out the targeting widgets on the right to trigger other variations."
+  });
 
   // 3. UI states
   const [showAiChat, setShowAiChat] = useState(false);
@@ -91,6 +96,23 @@ export default function Home() {
         
         {/* Left Hand Render Panel (Demonstrates Flags) */}
         <section style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
+
+          {/* Feature: Guest Sign-up Promo Banner */}
+          {isSignupBannerEnabled && (
+            <div className="glass-card" style={{ background: "linear-gradient(135deg, rgba(239, 68, 68, 0.08), rgba(249, 115, 22, 0.08))", border: "1px solid rgba(249, 115, 22, 0.3)", display: "flex", justifyContent: "space-between", alignItems: "center", padding: "16px 20px" }}>
+              <div>
+                <h4 style={{ margin: "0 0 4px 0", color: "var(--accent)", fontSize: "15px", fontWeight: "700" }}>🎁 Limited Guest Promo!</h4>
+                <p style={{ fontSize: "12.5px", margin: 0, color: "var(--badge-text)" }}>You are viewing as a guest. Register now to unlock our Advanced Features dashboard.</p>
+              </div>
+              <button 
+                onClick={() => { trackCTA("Banner Promo Signup"); startSignup(); }}
+                className="btn btn-primary"
+                style={{ padding: "6px 12px", fontSize: "12px" }}
+              >
+                Sign Up
+              </button>
+            </div>
+          )}
           
           {/* Feature 1: New Homepage vs Classic Homepage rendering */}
           {isNewHomepage ? (
@@ -114,10 +136,10 @@ export default function Home() {
               ) : (
                 <div style={{ margin: "16px 0" }}>
                   <h1 style={{ fontSize: "28px", fontWeight: 700, marginBottom: "12px" }}>
-                    Next.js Edge Experimentation & Flags
+                    {homepageContent.title}
                   </h1>
-                  <p style={{ fontSize: "15px", color: "var(--badge-text)", maxWidth: "550px" }}>
-                    Welcome to the control hero section. Check out the targeting widgets on the right to trigger other variations.
+                  <p style={{ fontSize: "15px", color: "var(--badge-text)", maxWidth: "550px", lineHeight: "22px" }}>
+                    {homepageContent.description}
                   </p>
                 </div>
               )}
@@ -239,32 +261,42 @@ export default function Home() {
                 <tr style={{ borderBottom: "1px solid var(--card-border)" }}>
                   <td style={{ padding: "8px 0" }}><code>new-homepage</code></td>
                   <td>{isNewHomepage ? <span style={{ color: "var(--success)" }}>ON</span> : "OFF"}</td>
-                  <td>Renders layout variant A vs B</td>
+                  <td>Renders layout variant A vs B (US/IN targeted)</td>
                 </tr>
                 <tr style={{ borderBottom: "1px solid var(--card-border)" }}>
                   <td style={{ padding: "8px 0" }}><code>dark-mode</code></td>
                   <td>{isDarkMode ? <span style={{ color: "var(--success)" }}>ON</span> : "OFF"}</td>
-                  <td>Overrides stylesheet colors</td>
+                  <td>Overrides stylesheet colors (logged-in only)</td>
                 </tr>
                 <tr style={{ borderBottom: "1px solid var(--card-border)" }}>
                   <td style={{ padding: "8px 0" }}><code>ai-assistant</code></td>
                   <td>{isAiAssistantEnabled ? <span style={{ color: "var(--success)" }}>ON</span> : "OFF"}</td>
-                  <td>Renders chatbot (premium users only)</td>
+                  <td>Renders chatbot (premium/enterprise only)</td>
                 </tr>
                 <tr style={{ borderBottom: "1px solid var(--card-border)" }}>
                   <td style={{ padding: "8px 0" }}><code>new-checkout</code></td>
                   <td>{isNewCheckoutEnabled ? <span style={{ color: "var(--success)" }}>ON</span> : "OFF"}</td>
-                  <td>Renders Multi-step signup form wizard</td>
+                  <td>Multi-step wizard (50% percentage rollout)</td>
+                </tr>
+                <tr style={{ borderBottom: "1px solid var(--card-border)" }}>
+                  <td style={{ padding: "8px 0" }}><code>signup-banner</code></td>
+                  <td>{isSignupBannerEnabled ? <span style={{ color: "var(--success)" }}>ON</span> : "OFF"}</td>
+                  <td>Renders guest signup banner (logged-out only)</td>
                 </tr>
                 <tr style={{ borderBottom: "1px solid var(--card-border)" }}>
                   <td style={{ padding: "8px 0" }}><code>homepage-hero</code></td>
                   <td style={{ color: "var(--accent)" }}>{heroVariant.toUpperCase()}</td>
-                  <td>A/B testing variant rule</td>
+                  <td>A/B testing variant rule (50/50 split)</td>
                 </tr>
-                <tr>
+                <tr style={{ borderBottom: "1px solid var(--card-border)" }}>
                   <td style={{ padding: "8px 0" }}><code>cta-button</code></td>
                   <td style={{ color: "var(--accent)" }}>{ctaColor.toUpperCase()}</td>
-                  <td>CTA color experiment (blue/green)</td>
+                  <td>CTA color experiment (blue/green 50/50 split)</td>
+                </tr>
+                <tr>
+                  <td style={{ padding: "8px 0" }}><code>homepage-content</code></td>
+                  <td style={{ color: "var(--accent)" }}>JSON</td>
+                  <td>Localized title/desc (targeted to US/IN country)</td>
                 </tr>
               </tbody>
             </table>
