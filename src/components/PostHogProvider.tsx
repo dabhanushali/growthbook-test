@@ -6,21 +6,35 @@ import { PostHogProvider as PHProvider } from "posthog-js/react";
 import { usePathname, useSearchParams } from "next/navigation";
 
 // Initialize PostHog client side only
+// A PostHog project key always starts with "phc_" and is at least 30 chars long.
+// If the env var is a placeholder/test key we skip init to avoid 401/404 noise.
+const isRealPostHogKey = (key: string) =>
+  key.startsWith("phc_") && key.length > 20 && !key.includes("test_key");
+
 if (typeof window !== "undefined") {
   const posthogKey = process.env.NEXT_PUBLIC_POSTHOG_KEY || "";
   const posthogHost = process.env.NEXT_PUBLIC_POSTHOG_HOST || "https://us.i.posthog.com";
-  
-  if (posthogKey) {
+
+  if (isRealPostHogKey(posthogKey)) {
     posthog.init(posthogKey, {
       api_host: posthogHost,
-      person_profiles: "identified_only", // capture profiles for identified users
-      capture_pageview: false, // Turn off automatic pageviews to manage it manually inside Next.js
+      person_profiles: "identified_only",
+      capture_pageview: false,
+      // Disable features that make extra API calls — avoids 404/401 when the
+      // PostHog project has no surveys or remote-config set up.
+      disable_surveys: true,
+      advanced_disable_decide: false,
       loaded: (ph) => {
         if (process.env.NODE_ENV === "development") {
-          ph.debug(); // Enable debug logs in development mode
+          ph.debug();
         }
       },
     });
+  } else if (process.env.NODE_ENV === "development") {
+    console.warn(
+      "[PostHog] Skipping init — NEXT_PUBLIC_POSTHOG_KEY is a placeholder.\n" +
+      "To enable analytics, replace it with your real project key from app.posthog.com."
+    );
   }
 }
 

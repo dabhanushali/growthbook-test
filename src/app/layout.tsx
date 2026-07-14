@@ -30,7 +30,7 @@ export default async function RootLayout({
   const attributes = await getServerAttributes();
 
   return (
-    <html lang="en" className={`${geistSans.variable} ${geistMono.variable}`}>
+    <html lang="en" className={`${geistSans.variable} ${geistMono.variable}`} suppressHydrationWarning>
       <body>
         <PostHogProvider>
           <GrowthBookProvider initialFeatures={features} initialAttributes={attributes}>

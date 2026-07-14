@@ -3,6 +3,15 @@
 import { useRouter } from "next/navigation";
 import { useState, useEffect } from "react";
 
+// Module-level cookie reader — accessible from all functions in this component
+function getCookie(name: string): string {
+  if (typeof document === "undefined") return "";
+  const value = `; ${document.cookie}`;
+  const parts = value.split(`; ${name}=`);
+  if (parts.length === 2) return parts.pop()?.split(";").shift() || "";
+  return "";
+}
+
 export function PocController() {
   const router = useRouter();
   
@@ -13,20 +22,11 @@ export function PocController() {
   const [anonId, setAnonId] = useState("");
 
   useEffect(() => {
-    // Read initial values from cookies/localStorage
-    const getCookie = (name: string) => {
-      if (typeof document === "undefined") return "";
-      const value = `; ${document.cookie}`;
-      const parts = value.split(`; ${name}=`);
-      if (parts.length === 2) return parts.pop()?.split(";").shift();
-      return "";
-    };
-
     setRole(getCookie("gb_role") || "guest");
     setPlan(getCookie("gb_plan") || "free");
     setCountry(getCookie("gb_country") || "US");
     setLoggedIn(getCookie("gb_logged_in") === "true");
-    setAnonId(localStorage.getItem("gb_anon_id") || "Unknown");
+    setAnonId(getCookie("gb_anon_id") || "(will be set on first load)");
   }, []);
 
   const setCookie = (name: string, val: string) => {
@@ -41,12 +41,24 @@ export function PocController() {
   };
 
   const resetUserSession = () => {
-    localStorage.removeItem("gb_anon_id");
-    const newId = "anon_" + Math.random().toString(36).substring(2, 11);
-    localStorage.setItem("gb_anon_id", newId);
-    setCookie("gb_anon_id", newId);
-    setAnonId(newId);
+    // Delete the cookie — the Edge Middleware will generate a fresh gb_anon_id
+    // on the very next request (triggered by router.refresh() below).
+    document.cookie = "gb_anon_id=; path=/; max-age=0";
+    setAnonId("(regenerating...)");
     router.refresh();
+
+    // Poll every 150ms until the middleware has set the new cookie (usually 1–2 polls).
+    // Stop after 3 seconds to avoid infinite loops.
+    let elapsed = 0;
+    const interval = setInterval(() => {
+      const newId = getCookie("gb_anon_id");
+      if (newId) {
+        setAnonId(newId);
+        clearInterval(interval);
+      }
+      elapsed += 150;
+      if (elapsed >= 3000) clearInterval(interval);
+    }, 150);
   };
 
   return (

@@ -26,19 +26,39 @@ export async function getGrowthBookFeatures() {
   const url = `${apiHost}/api/features/${clientKey}`;
 
   try {
-    const res = await fetch(url, {
-      next: { revalidate: 10 },
-    });
+    const res = await fetch(url, { cache: "no-store" });
     if (!res.ok) {
       throw new Error(`Failed to fetch features: ${res.statusText}`);
     }
     const json = await res.json();
-    return json.features || LOCAL_MOCK_FEATURES;
+    const apiFeatures: Record<string, any> = json.features || {};
+
+    // Merge strategy: LOCAL_MOCK_FEATURES provides the targeting rule baseline.
+    // If the live GrowthBook API has published rules for a flag, those win.
+    // If the API returns a flag with NO rules (unpublished draft), the mock rules are used.
+    // This lets the POC work without requiring every flag to be published in the dashboard.
+    const merged: Record<string, any> = { ...LOCAL_MOCK_FEATURES };
+    for (const [key, apiVal] of Object.entries(apiFeatures)) {
+      const hasApiRules = apiVal.rules && apiVal.rules.length > 0;
+      if (hasApiRules) {
+        // Live published rules exist — use them
+        merged[key] = apiVal;
+      } else if (merged[key]) {
+        // API returned the flag but with no rules (draft not published yet).
+        // Keep the mock rules but respect the API's defaultValue if it differs.
+        merged[key] = { ...merged[key], defaultValue: apiVal.defaultValue };
+      } else {
+        // Flag only exists in the API (not in mock) — add it as-is
+        merged[key] = apiVal;
+      }
+    }
+    return merged;
   } catch (err) {
     console.warn("Error fetching features from GrowthBook, using local mock features fallback:", err);
     return LOCAL_MOCK_FEATURES;
   }
 }
+
 
 // Fetch user attributes server-side from request contexts
 export async function getServerAttributes() {
@@ -63,7 +83,11 @@ export async function getServerAttributes() {
   }
   
   // Detect country & device type from headers
-  const country = headerStore.get("x-vercel-ip-country") || "US";
+  // Priority: Vercel geo header → POC Controller cookie (gb_country) → default "US"
+  const country =
+    headerStore.get("x-vercel-ip-country") ||
+    cookieStore.get("gb_country")?.value ||
+    "US";
   const userAgent = headerStore.get("user-agent") || "";
   const device = /Mobi|Android/i.test(userAgent) ? "mobile" : "desktop";
   

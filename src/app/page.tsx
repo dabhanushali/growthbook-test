@@ -1,11 +1,28 @@
 "use client";
 
-import { useFeatureIsOn, useFeatureValue } from "@growthbook/growthbook-react";
+import { useFeatureIsOn, useFeatureValue, useGrowthBook } from "@growthbook/growthbook-react";
 import { useState, useEffect } from "react";
 import { PocController } from "@/components/PocController";
 import posthog from "posthog-js";
 
 export default function Home() {
+  const gb = useGrowthBook();
+
+  // Helper to log metrics directly to the Postgres database
+  const logDbEvent = async (eventName: string) => {
+    try {
+      const attributes = gb?.getAttributes() || {};
+      const userId = attributes.id || "unknown_user";
+      await fetch("/api/log-event", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId, eventName }),
+      });
+    } catch (e) {
+      console.error("Failed to log event to Postgres:", e);
+    }
+  };
+
   // 1. Evaluate ON/OFF Feature Flags
   const isNewHomepage = useFeatureIsOn("new-homepage");
   const isDarkMode = useFeatureIsOn("dark-mode");
@@ -14,7 +31,7 @@ export default function Home() {
   const isSignupBannerEnabled = useFeatureIsOn("signup-banner");
 
   // 2. Evaluate Experiment & Remote Config Values (with defaults)
-  const heroVariant = useFeatureValue("homepage-hero", "control"); // "control" vs "variant"
+  const heroVariant = useFeatureValue("homepage-hero", "control"); // "control" vs "treatment"
   const ctaColor = useFeatureValue("cta-button", "blue"); // "blue" vs "green"
   const homepageContent = useFeatureValue("homepage-content", {
     title: "Next.js Edge Experimentation & Flags",
@@ -38,6 +55,7 @@ export default function Home() {
       ctaColor,
       isNewHomepage,
     });
+    logDbEvent("CTA Clicked");
   };
 
   const startSignup = () => {
@@ -45,6 +63,7 @@ export default function Home() {
     posthog.capture("Signup Started", {
       isNewCheckoutEnabled,
     });
+    logDbEvent("Signup Started");
     setCheckoutStep(1);
   };
 
@@ -53,21 +72,23 @@ export default function Home() {
     posthog.capture("Signup Completed", {
       isNewCheckoutEnabled,
     });
+    logDbEvent("Signup Completed");
     setCheckoutStep(2);
   };
+
 
   const handleSendMessage = (e: React.FormEvent) => {
     e.preventDefault();
     if (!chatInput.trim()) return;
-    
+
     const userMsg = chatInput;
     setChatMessages(prev => [...prev, { sender: "user", text: userMsg }]);
     setChatInput("");
 
     setTimeout(() => {
-      setChatMessages(prev => [...prev, { 
-        sender: "ai", 
-        text: `You sent: "${userMsg}". Since this is a POC mock, I can confirm your GrowthBook profile attributes are actively evaluated in our Edge Middleware!` 
+      setChatMessages(prev => [...prev, {
+        sender: "ai",
+        text: `You sent: "${userMsg}". Since this is a POC mock, I can confirm your GrowthBook profile attributes are actively evaluated in our Edge Middleware!`
       }]);
     }, 800);
   };
@@ -93,7 +114,7 @@ export default function Home() {
 
       {/* Main Content Area */}
       <main style={{ flex: 1, padding: "40px 24px", maxWidth: "1200px", width: "100%", margin: "0 auto", display: "grid", gridTemplateColumns: "1fr 380px", gap: "32px" }}>
-        
+
         {/* Left Hand Render Panel (Demonstrates Flags) */}
         <section style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
 
@@ -104,7 +125,7 @@ export default function Home() {
                 <h4 style={{ margin: "0 0 4px 0", color: "var(--accent)", fontSize: "15px", fontWeight: "700" }}>🎁 Limited Guest Promo!</h4>
                 <p style={{ fontSize: "12.5px", margin: 0, color: "var(--badge-text)" }}>You are viewing as a guest. Register now to unlock our Advanced Features dashboard.</p>
               </div>
-              <button 
+              <button
                 onClick={() => { trackCTA("Banner Promo Signup"); startSignup(); }}
                 className="btn btn-primary"
                 style={{ padding: "6px 12px", fontSize: "12px" }}
@@ -113,7 +134,7 @@ export default function Home() {
               </button>
             </div>
           )}
-          
+
           {/* Feature 1: New Homepage vs Classic Homepage rendering */}
           {isNewHomepage ? (
             /* Variant New Homepage View */
@@ -122,7 +143,7 @@ export default function Home() {
                 <span className="badge badge-active" style={{ marginBottom: "12px" }}>✨ New Homepage Enabled</span>
                 <span style={{ fontSize: "11px", color: "var(--accent)", fontWeight: "bold" }}>Feature Flag (new-homepage)</span>
               </div>
-              
+
               {/* Feature 5: A/B Testing Hero Experiment */}
               {heroVariant === "variant" ? (
                 <div style={{ margin: "16px 0" }}>
@@ -157,12 +178,12 @@ export default function Home() {
                     {checkoutStep === 0 && (
                       <div>
                         <p style={{ fontSize: "13px", marginBottom: "12px" }}>Select your subscription plan to get started instantly.</p>
-                        <button 
+                        <button
                           onClick={startSignup}
-                          className="btn" 
-                          style={{ 
-                            background: ctaColor === "green" ? "var(--success)" : "var(--primary)", 
-                            color: "white" 
+                          className="btn"
+                          style={{
+                            background: ctaColor === "green" ? "var(--success)" : "var(--primary)",
+                            color: "white"
                           }}
                         >
                           Unlock Plan Now
@@ -190,19 +211,19 @@ export default function Home() {
                   </div>
                 ) : (
                   /* Standard Button (New Checkout Disabled) */
-                  <button 
+                  <button
                     onClick={() => { trackCTA("Standard Sign Up"); startSignup(); }}
-                    className="btn" 
-                    style={{ 
-                      background: ctaColor === "green" ? "var(--success)" : "var(--primary)", 
-                      color: "white" 
+                    className="btn"
+                    style={{
+                      background: ctaColor === "green" ? "var(--success)" : "var(--primary)",
+                      color: "white"
                     }}
                   >
                     Get Started (CTA Color: {ctaColor.toUpperCase()})
                   </button>
                 )}
-                
-                <button 
+
+                <button
                   onClick={() => trackCTA("Learn More")}
                   className="btn btn-secondary"
                 >
@@ -236,8 +257,8 @@ export default function Home() {
               <p style={{ fontSize: "14px", color: "var(--badge-text)", marginBottom: "16px" }}>
                 This is the fallback classic interface. You can enable the "new-homepage" feature flag in the GrowthBook dashboard to show the new interactive grid dashboard.
               </p>
-              
-              <button 
+
+              <button
                 onClick={() => trackCTA("Classic Sign Up")}
                 className="btn btn-primary"
               >
@@ -306,7 +327,7 @@ export default function Home() {
 
         {/* Right Hand Sidebar (Controller Panel) */}
         <aside style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
-          
+
           {/* Interactive mock user controller */}
           <PocController />
 
@@ -348,9 +369,9 @@ export default function Home() {
               {/* Chat Message Window */}
               <div style={{ flex: 1, overflowY: "auto", display: "flex", flexDirection: "column", gap: "8px", paddingBottom: "8px" }}>
                 {chatMessages.map((msg, index) => (
-                  <div 
+                  <div
                     key={index}
-                    style={{ 
+                    style={{
                       alignSelf: msg.sender === "ai" ? "flex-start" : "flex-end",
                       background: msg.sender === "ai" ? "var(--badge-bg)" : "var(--primary)",
                       color: msg.sender === "ai" ? "var(--foreground)" : "white",
@@ -367,9 +388,9 @@ export default function Home() {
 
               {/* Send Box */}
               <form onSubmit={handleSendMessage} style={{ display: "flex", gap: "6px" }}>
-                <input 
-                  type="text" 
-                  value={chatInput} 
+                <input
+                  type="text"
+                  value={chatInput}
                   onChange={(e) => setChatInput(e.target.value)}
                   placeholder="Ask a question..."
                   style={{ flex: 1, padding: "8px", borderRadius: "6px", border: "1px solid var(--card-border)", fontSize: "12px", background: "var(--background)", color: "var(--foreground)" }}
@@ -378,13 +399,13 @@ export default function Home() {
               </form>
             </div>
           ) : (
-            <button 
+            <button
               onClick={() => { setShowAiChat(true); trackCTA("AI Chat Opened"); }}
-              className="btn btn-primary" 
-              style={{ 
-                borderRadius: "50%", 
-                width: "56px", 
-                height: "56px", 
+              className="btn btn-primary"
+              style={{
+                borderRadius: "50%",
+                width: "56px",
+                height: "56px",
                 boxShadow: "0 4px 12px rgba(99, 102, 241, 0.4)",
                 fontSize: "24px"
               }}

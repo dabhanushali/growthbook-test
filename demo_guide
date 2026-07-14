@@ -1,0 +1,92 @@
+# GrowthBook + Next.js Edge Personalization + PostHog POC Demo Guide
+
+This document summarizes our step-by-step implementation and serves as a script for demonstrating the Proof of Concept (POC) to your team today.
+
+---
+
+## 1. Executive Summary & Architecture
+
+This POC implements **zero-latency experimentation and personalization** at the Edge using Next.js App Router, GrowthBook, and PostHog.
+
+### High-Level Architecture Flow
+
+```
+User Request (localhost:3001)
+  └─► Next.js Edge Middleware (proxy.ts)
+        ├─► Resolves cookie-based attributes (Country, Role, Plan, Logged-in)
+        ├─► Fetches feature configurations (with local fallback if offline)
+        └─► Injects features & attributes into HTTP request headers
+              └─► Next.js Page renders HTML Server-side (No Layout Shift)
+                    ├─► Hydrates Client-side (Streaming connection to GrowthBook)
+                    └─► Tracks conversions to PostHog & local Postgres DB
+```
+
+---
+
+## 2. Step-by-Step Implementation Chronology
+
+Here are the phases we completed to build this solution:
+
+### Phase 1: Environment & Platform Provisioning
+* **Local Docker Infrastructure**: Launched GrowthBook alongside MongoDB (configs), Redis (fast API caching), and Postgres (user metrics storage) using `docker-compose.yml`.
+* **Services**: 
+  * GrowthBook Dashboard: `http://localhost:3000` (admin@example.com / GrowthBookPOC2026!)
+  * Next.js App: `http://localhost:3001`
+  * PostHog Cloud Integration: Event ingestion configuration.
+
+### Phase 2: Next.js Setup & Edge Middleware Optimization
+* Created a Next.js App Router project configured with TypeScript.
+* Built **Edge Routing middleware** (`src/proxy.ts` / Next.js 16 Proxy convention) to intercept every route, resolve user location/role cookies, and inject them into request headers (`x-gb-features`, `x-gb-attributes`).
+* **Why this is critical**: This setup completely avoids Cumulative Layout Shift (CLS). The browser receives already-targeted HTML directly from the server.
+
+### Phase 3: Client Integration & SSR Hydration
+* Wrapped the application root layout with `GrowthBookProvider` and `PostHogProvider`.
+* Handled React hydration mismatch safeguards by ensuring the client mounts with the exact same attributes the server used for rendering.
+* Enabled client-side SSE (Server-Sent Events) streaming so flag updates in the dashboard propagate to the page instantly without a manual browser reload.
+
+### Phase 4: A/B Testing, Targeting, & Percentage Rollouts
+Defined and configured 5 feature flags:
+1. `new-homepage` (Geo-targeted: US/India)
+2. `dark-mode` (Auth-targeted: Logged In)
+3. `ai-assistant` (Plan-targeted: Premium/Enterprise)
+4. `new-checkout` (Percentage Rollout: 50% user hash)
+5. `homepage-hero` (A/B Test: Control vs. Variant)
+
+### Phase 5: Metrics Loop & Postgres Event Logging
+* Added Postgres table creation schema to store events.
+* Created an API route `/api/log-event` to write browser clicks into the Postgres container database.
+* Linked Postgres to GrowthBook as the **Data Source** and defined a Binomial Success Metric (`Signup Completed`), closing the experimentation loop.
+
+---
+
+## 3. Step-by-Step Demo Script (Show the Team)
+
+Follow these steps to demonstrate the live capability to your team:
+
+### Step A: Show Geo-Targeting (`new-homepage` flag)
+1. Open the app at `http://localhost:3001`.
+2. Notice the default page: `Classic Design` (since country defaults to US, but the draft rules are merging).
+3. Open the **Targeting Console** on the right side.
+4. Set **Country** to **India (IN)**.
+5. **Observe**: The page instantly updates:
+   * Header badge updates to `New Home: ON`
+   * Classic layout is replaced with the premium glassmorphic dashboard
+   * The headline translates locally: *"Namaste! Welcome to our Indian GrowthBook Experience"*
+
+### Step B: Show Gated Features (`dark-mode` & `ai-assistant`)
+1. In the Targeting Console, toggle **Authentication** to **🔓 Logged In**.
+   * **Observe**: The application theme instantly changes to dark mode.
+2. In the Targeting Console, change **Subscription Plan** to **Premium Tier**.
+   * **Observe**: A floating chat widget button appears at the bottom-right.
+   * Open the chat, type a message, and demonstrate the mock AI assistant response.
+
+### Step C: Show Sticky A/B Testing & Re-rolling
+1. Direct the team's attention to the **Feature Flag & Experiment Guide** table at the bottom.
+2. Observe the current values for `homepage-hero` (CONTROL or TREATMENT) and `cta-button` (BLUE or GREEN).
+3. Click the **🔄 Re-roll User ID** button.
+4. **Observe**: The ID updates to a new `anon_xxxx` value, and the A/B test variant updates to either CONTROL (Classic title) or TREATMENT (Bold gradient title) based on the new user's bucket hash.
+
+### Step D: Show the Metrics Loop in GrowthBook
+1. Open the GrowthBook dashboard at `http://localhost:3000/metrics`.
+2. Show the **`Signup Completed`** metric that is actively pulling data from your Postgres database.
+3. Show the **`5.88%`** conversion rate currently being generated by the live test clicks.

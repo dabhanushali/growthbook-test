@@ -47,7 +47,6 @@ export async function proxy(request: NextRequest) {
       const id = setTimeout(() => controller.abort(), 200); // 200ms timeout
       const res = await fetch(`${apiHost}/api/features/${clientKey}`, {
         signal: controller.signal,
-        next: { revalidate: 10 }
       });
       clearTimeout(id);
       if (res.ok) {

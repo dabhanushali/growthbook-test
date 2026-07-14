@@ -20,31 +20,49 @@ export function GrowthBookProvider({ children, initialFeatures, initialAttribute
     features: initialFeatures,
     attributes: initialAttributes,
     trackingCallback: (experiment, result) => {
-      console.log("GrowthBook Experiment Exposed:", experiment.key, "Variant:", result.key);
-      
-      // Track exposure event in PostHog
+      const userId = gb.getAttributes().id || "unknown_user";
+      console.log("GrowthBook Experiment Exposed:", experiment.key, "Variant:", result.value);
+
+      // 1. Track exposure event in PostHog
       posthog.capture("$experiment_started", {
         "Experiment ID": experiment.key,
-        "Variant ID": result.key,
+        "Variant ID": String(result.value),
         $feature_flag_key: experiment.key,
-        $feature_flag_variant: result.key,
+        $feature_flag_variant: String(result.value),
       });
+
+      // 2. Track exposure event in local Postgres (for GrowthBook stats engine queries)
+      fetch("/api/log-event", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          userId,
+          experimentId: experiment.key,
+          variationId: String(result.value),
+        }),
+      }).catch((e) => console.error("Failed to log exposure to Postgres:", e));
     },
   }));
 
   useEffect(() => {
-    // Enable streaming for SSE live updates on the client
-    gb.init({
-      streaming: true,
-    });
-    
-    // Supplement browser-only attributes on load
-    const deviceType = /Mobi|Android/i.test(navigator.userAgent) ? "mobile" : "desktop";
-    gb.setAttributes({
-      ...gb.getAttributes(),
-      device: deviceType,
-    });
+    // Enable streaming for SSE live updates on the client — run only once.
+    gb.init({ streaming: true });
   }, [gb]);
+
+  useEffect(() => {
+    // Sync server-resolved attributes into the client SDK whenever they change
+    // (e.g. after a Re-roll or a cookie update from the POC Controller).
+    // This is what makes A/B bucketing re-evaluate with the new user ID.
+    if (initialAttributes) {
+      const deviceType = /Mobi|Android/i.test(navigator.userAgent) ? "mobile" : "desktop";
+      gb.setAttributes({
+        ...initialAttributes,
+        device: deviceType, // override with the real client-detected value
+      });
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [gb, JSON.stringify(initialAttributes)]);
+
 
   return <GBProvider growthbook={gb}>{children}</GBProvider>;
 }
