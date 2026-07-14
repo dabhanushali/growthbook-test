@@ -1,6 +1,6 @@
 import { GrowthBook } from "@growthbook/growthbook";
 import { cookies as nextCookies, headers as nextHeaders } from "next/headers";
-import { LOCAL_MOCK_FEATURES } from "./gb-features";
+
 
 // Fetch features from the local/cloud GrowthBook instance
 export async function getGrowthBookFeatures() {
@@ -19,8 +19,8 @@ export async function getGrowthBookFeatures() {
   const clientKey = process.env.NEXT_PUBLIC_GROWTHBOOK_CLIENT_KEY;
 
   if (!clientKey) {
-    console.warn("GrowthBook Client Key is not configured. Falling back to local mock features.");
-    return LOCAL_MOCK_FEATURES;
+    console.warn("GrowthBook Client Key is not configured. Returning empty features.");
+    return {};
   }
 
   const url = `${apiHost}/api/features/${clientKey}`;
@@ -31,31 +31,11 @@ export async function getGrowthBookFeatures() {
       throw new Error(`Failed to fetch features: ${res.statusText}`);
     }
     const json = await res.json();
-    const apiFeatures: Record<string, any> = json.features || {};
-
-    // Merge strategy: LOCAL_MOCK_FEATURES provides the targeting rule baseline.
-    // If the live GrowthBook API has published rules for a flag, those win.
-    // If the API returns a flag with NO rules (unpublished draft), the mock rules are used.
-    // This lets the POC work without requiring every flag to be published in the dashboard.
-    const merged: Record<string, any> = { ...LOCAL_MOCK_FEATURES };
-    for (const [key, apiVal] of Object.entries(apiFeatures)) {
-      const hasApiRules = apiVal.rules && apiVal.rules.length > 0;
-      if (hasApiRules) {
-        // Live published rules exist — use them
-        merged[key] = apiVal;
-      } else if (merged[key]) {
-        // API returned the flag but with no rules (draft not published yet).
-        // Keep the mock rules but respect the API's defaultValue if it differs.
-        merged[key] = { ...merged[key], defaultValue: apiVal.defaultValue };
-      } else {
-        // Flag only exists in the API (not in mock) — add it as-is
-        merged[key] = apiVal;
-      }
-    }
-    return merged;
+    // Use API features directly — no local mock fallback
+    return json.features || {};
   } catch (err) {
-    console.warn("Error fetching features from GrowthBook, using local mock features fallback:", err);
-    return LOCAL_MOCK_FEATURES;
+    console.warn("Error fetching features from GrowthBook API:", err);
+    return {};
   }
 }
 

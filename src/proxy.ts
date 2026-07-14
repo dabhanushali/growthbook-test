@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { GrowthBook } from "@growthbook/growthbook";
-import { LOCAL_MOCK_FEATURES } from "./lib/gb-features";
+
 
 export async function proxy(request: NextRequest) {
   // 1. Get or generate anonymous ID
@@ -37,7 +37,7 @@ export async function proxy(request: NextRequest) {
   // 3. Retrieve feature flags definitions
   // In production, we'd cache these in Vercel Edge Config or Redis.
   // For the POC, we fetch from the local API with a 200ms timeout fallback.
-  let features = LOCAL_MOCK_FEATURES;
+  let features: Record<string, any> = {}; // rely entirely on live GrowthBook API
   const apiHost = process.env.NEXT_PUBLIC_GROWTHBOOK_API_HOST || "http://localhost:3100";
   const clientKey = process.env.NEXT_PUBLIC_GROWTHBOOK_CLIENT_KEY;
 
